@@ -303,6 +303,7 @@ echo "ansible_ssh_common_args='-F $sshconfig'" >>"$hostsfile"
 echo "$(date) Running ansible playbook"
 ansible-playbook -i "$hostsfile" site.yaml
 
+# displaying the bastion and haproxy ip address 
 echo "Bastion IP address: "$floating_ip1""
 
 echo "HAproxy IP address: "$floating_ip2""
