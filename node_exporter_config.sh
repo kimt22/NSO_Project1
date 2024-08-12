@@ -56,5 +56,5 @@ sudo systemctl enable node_exporter &
 sudo systemctl start node_exporter &
 sudo ufw allow 9100/udp &
 
-echo "Node Exporter setup complete."
+echo "Node Exporter setup completed."
 
