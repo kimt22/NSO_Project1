@@ -7,7 +7,10 @@ tag_name=$2
 sshkey=$3
 sshk=${sshkey%.pub}
 required_no_of_servers=3
-source $openrc_file
+source "$openrc_file"
+
+chmod 600 "$sshk"
+chmod 600 "$sshkey"
 
 echo "$current_date_time Starting deployment of $tag_name using $openrc_file for credentials."
 
@@ -43,9 +46,6 @@ if test -f "hosts"; then
     rm "$hosts"
 fi
 
-# setting the perimission for ssh private key
-
-chmod 600 "$sshk"
 
 
 # Check if keypair present
@@ -235,7 +235,7 @@ echo "$(date) Generating config file"
 echo "Host $bastion_server" >>"$sshconfig"
 echo "   User ubuntu" >>"$sshconfig"
 echo "   HostName $float_ip_addr_bastion" >>"$sshconfig"
-echo "   IdentityFile ~/.ssh/id_rsa" >>"$sshconfig"
+echo "   IdentityFile $PWD/$sshk" >>"$sshconfig"
 echo "   UserKnownHostsFile /dev/null" >>"$sshconfig"
 echo "   StrictHostKeyChecking no" >>"$sshconfig"
 echo "   PasswordAuthentication no" >>"$sshconfig"
@@ -244,7 +244,7 @@ echo " " >>"$sshconfig"
 echo "Host $haproxy_server" >>"$sshconfig"
 echo "   User ubuntu" >>"$sshconfig"
 echo "   HostName $float_ip_addr_proxy1" >>"$sshconfig"
-echo "   IdentityFile ~/.ssh/id_rsa" >>"$sshconfig"
+echo "   IdentityFile $PWD/$sshk" >>"$sshconfig"
 echo "   StrictHostKeyChecking no" >>"$sshconfig"
 echo "   PasswordAuthentication no" >>"$sshconfig"
 echo "   ProxyJump $bastion_server" >>"$sshconfig"
@@ -253,7 +253,7 @@ echo " " >>"$sshconfig"
 echo "Host $haproxy_server2" >>"$sshconfig"
 echo "   User ubuntu" >>"$sshconfig"
 echo "   HostName $float_ip_addr_proxy2" >>"$sshconfig"
-echo "   IdentityFile ~/.ssh/id_rsa" >>"$sshconfig"
+echo "   IdentityFile $PWD/$sshk" >>"$sshconfig"
 echo "   StrictHostKeyChecking no" >>"$sshconfig"
 echo "   PasswordAuthentication no" >>"$sshconfig"
 echo "   ProxyJump $bastion_server" >>"$sshconfig"
@@ -278,7 +278,7 @@ echo "$awakeserv" | while IFS= read -r serv; do
     echo "Host $serv" >>"$sshconfig"
     echo "   User ubuntu" >>"$sshconfig"
     echo "   HostName $ipadd" >>"$sshconfig"
-    echo "   IdentityFile ~/.ssh/id_rsa" >>"$sshconfig"
+    echo "   IdentityFile $PWD/$sshk" >>"$sshconfig"
     echo "   UserKnownHostsFile=/dev/null" >>"$sshconfig"
     echo "   StrictHostKeyChecking no" >>"$sshconfig"
     echo "   PasswordAuthentication no" >>"$sshconfig"
@@ -297,7 +297,7 @@ echo "$haproxy_server2" >>"$hostsfile"
 echo " " >>"$hostsfile"
 echo "[all:vars]" >>"$hostsfile"
 echo "ansible_user=ubuntu" >>"$hostsfile"
-echo "ansible_ssh_private_key_file=~/.ssh/id_rsa" >>"$hostsfile"
+echo "ansible_ssh_private_key_file=$PWD/$sshk" >>"$hostsfile"
 echo "ansible_ssh_common_args='-F $sshconfig'" >>"$hostsfile"
 
 echo "$(date) Running ansible playbook"
@@ -307,4 +307,3 @@ ansible-playbook -i "$hostsfile" site.yaml
 echo "Bastion IP address: "$floating_ip1""
 
 echo "HAproxy IP address: "$floating_ip2""
-
