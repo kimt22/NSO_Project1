@@ -8,7 +8,7 @@ display_current_date_time() {
 # Variables
 openrcfile=$1
 tag=$2
-ssh_key=$3
+sshk=$3
 sshkey="${sshk}.pub"
 required_dev_servers=$(cat servers.conf)
 
@@ -159,7 +159,7 @@ clean_up_securitygrps() {
 display_current_date_time
 echo "Starting cleaning of $tag using $openrcfile for credentials."
 source "$openrcfile"
-chmod 600 "$ssh_key"
+chmod 600 "$sshk"
 chmod 600 "$sshkey"
 
 # Call the cleanup functions
