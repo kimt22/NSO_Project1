@@ -25,12 +25,11 @@ Usage Instructions
 ```bash
 chmod +x install operate cleanup
 ```
-2. Generate ssh keys, the ssh keys are to be present in the ssh directory and permissions to the key
+2. Generate ssh keys, the ssh keys are to be present in the working directory 
 ```bash
 ssh-keygen -t rsa 
-chmod 600 <path to the key pair>
 ```
-3. open-rc file to be present in the working directory
+3. open-rc file to be present in the working directory 
 ```bash
 source <name of open-rc file>
 ```
@@ -46,9 +45,13 @@ source <name of open-rc file>
 ```bash
 ./cleanup <name of open-rc file> <tag> <path to generated public key>
 ```
- 
-
-
+Requirements 
+```bash
+sudo apt update
+sudo apt install python3-openstackclient -y
+sudo apt install jq -y 
+sudo apt install ansible -y
+```
 
 
 
