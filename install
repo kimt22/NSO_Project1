@@ -4,14 +4,15 @@
 display_date_time=$(date)
 openrc_file=$1
 tag_name=$2
-sshkey=$3
-sshk=${sshkey%.pub}
+sshk=$3
+sshkey="${sshk}.pub"
 required_no_of_servers=3
-source "$openrc_file"
+source $openrc_file
+
+# setting the perimission for ssh private key
 
 chmod 600 "$sshk"
 chmod 600 "$sshkey"
-
 echo "$current_date_time Starting deployment of $tag_name using $openrc_file for credentials."
 
 
@@ -45,6 +46,8 @@ fi
 if test -f "hosts"; then
     rm "$hosts"
 fi
+
+# setting the perimission for ssh private key
 
 
 

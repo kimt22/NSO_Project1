@@ -6,9 +6,15 @@ display_current_date_time() {
 }
 
 # Variables
-openrcfile=$1
+openrc_file=$1
 tag=$2
-ssh_key=$3
+sshk=$3
+sshkey="${sshk}.pub"
+
+source $openrc_file
+chmod 600 "$sshk"
+chmod 600 "$sshkey"
+
 required_dev_servers=$(cat servers.conf)
 
 def_network="${tag}_network"
@@ -171,4 +177,3 @@ clean_up_securitygrps
 
 # Remove unnecessary files
 rm -f "$sshconf_file" "$knownhosts" "floatipadd1" "floatipadd2" "$hostsfile" "addr_vip" "vadd"
-
