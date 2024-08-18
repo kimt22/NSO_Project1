@@ -4,15 +4,14 @@
 display_date_time=$(date)
 openrc_file=$1
 tag_name=$2
-sshk=$3
-sshkey="${sshk}.pub"
+sshkey=$3
+sshk="${sshkey}.pub"
 required_no_of_servers=3
-source $openrc_file
-
-# setting the perimission for ssh private key
+source "$openrc_file"
 
 chmod 600 "$sshk"
 chmod 600 "$sshkey"
+
 echo "$current_date_time Starting deployment of $tag_name using $openrc_file for credentials."
 
 
@@ -39,15 +38,13 @@ if test -f "$sshconfig"; then
     rm "$sshconfig"
 fi
 
-if test -f "knownhosts"; then
+if test -f "$knownhosts"; then
     rm "$knownhosts"
 fi
 
-if test -f "hosts"; then
+if test -f "$hosts"; then
     rm "$hosts"
 fi
-
-# setting the perimission for ssh private key
 
 
 
@@ -58,7 +55,7 @@ if echo "$keypairs_inventory" | grep -qFx $def_keypair_name; then
     echo "$(date) this keypair $def_keypair_name already exists"
 else
     # Create Keypair
-    created_keypair=$(openstack keypair create --public-key $sshkey "$def_keypair_name" )
+    created_keypair=$(openstack keypair create --public-key $sshk "$def_keypair_name" )
     echo "$(date) Created keypair $def_keypair_name"
 fi
 
@@ -153,8 +150,9 @@ if ! echo "$active_serv_present" | grep -q "$bastion_server"; then
     fi
 
     create_bastion=$(openstack server create --image "Ubuntu 20.04 Focal Fossa x86_64" "$bastion_server" --key-name "$def_keypair_name" --flavor "1C-1GB-50GB" --network "$def_network_name" --security-group "$def_security_group_name")
-    fipadd_bastion=$(openstack server add floating ip "$bastion_server" "$floating_ip1")
     echo "$(date) Created $bastion_server server"
+    fipadd_bastion= openstack server add floating ip "$bastion_server" "$floating_ip1"
+    echo "$(date) Attached $floating_ip1 to $bastion_server server"
 else 
     echo "$(date) $bastion_server already exists"
 fi
@@ -238,7 +236,7 @@ echo "$(date) Generating config file"
 echo "Host $bastion_server" >>"$sshconfig"
 echo "   User ubuntu" >>"$sshconfig"
 echo "   HostName $float_ip_addr_bastion" >>"$sshconfig"
-echo "   IdentityFile $PWD/$sshk" >>"$sshconfig"
+echo "   IdentityFile $PWD/$sshkey" >>"$sshconfig"
 echo "   UserKnownHostsFile /dev/null" >>"$sshconfig"
 echo "   StrictHostKeyChecking no" >>"$sshconfig"
 echo "   PasswordAuthentication no" >>"$sshconfig"
@@ -247,7 +245,7 @@ echo " " >>"$sshconfig"
 echo "Host $haproxy_server" >>"$sshconfig"
 echo "   User ubuntu" >>"$sshconfig"
 echo "   HostName $float_ip_addr_proxy1" >>"$sshconfig"
-echo "   IdentityFile $PWD/$sshk" >>"$sshconfig"
+echo "   IdentityFile $PWD/$sshkey" >>"$sshconfig"
 echo "   StrictHostKeyChecking no" >>"$sshconfig"
 echo "   PasswordAuthentication no" >>"$sshconfig"
 echo "   ProxyJump $bastion_server" >>"$sshconfig"
@@ -256,7 +254,7 @@ echo " " >>"$sshconfig"
 echo "Host $haproxy_server2" >>"$sshconfig"
 echo "   User ubuntu" >>"$sshconfig"
 echo "   HostName $float_ip_addr_proxy2" >>"$sshconfig"
-echo "   IdentityFile $PWD/$sshk" >>"$sshconfig"
+echo "   IdentityFile $PWD/$sshkey" >>"$sshconfig"
 echo "   StrictHostKeyChecking no" >>"$sshconfig"
 echo "   PasswordAuthentication no" >>"$sshconfig"
 echo "   ProxyJump $bastion_server" >>"$sshconfig"
@@ -281,7 +279,7 @@ echo "$awakeserv" | while IFS= read -r serv; do
     echo "Host $serv" >>"$sshconfig"
     echo "   User ubuntu" >>"$sshconfig"
     echo "   HostName $ipadd" >>"$sshconfig"
-    echo "   IdentityFile $PWD/$sshk" >>"$sshconfig"
+    echo "   IdentityFile $PWD/$sshkey" >>"$sshconfig"
     echo "   UserKnownHostsFile=/dev/null" >>"$sshconfig"
     echo "   StrictHostKeyChecking no" >>"$sshconfig"
     echo "   PasswordAuthentication no" >>"$sshconfig"
@@ -300,8 +298,19 @@ echo "$haproxy_server2" >>"$hostsfile"
 echo " " >>"$hostsfile"
 echo "[all:vars]" >>"$hostsfile"
 echo "ansible_user=ubuntu" >>"$hostsfile"
-echo "ansible_ssh_private_key_file=$PWD/$sshk" >>"$hostsfile"
+echo "ansible_ssh_private_key_file=$PWD/$sshkey" >>"$hostsfile"
 echo "ansible_ssh_common_args='-F $sshconfig'" >>"$hostsfile"
+
+server_ids=$(openstack server list -f value -c ID)
+# Check the status of each server
+for server_id in $server_ids; do
+    status=$(openstack server show -f value -c status "$server_id")
+		while [ "$status" != "ACTIVE" ]; do
+			sleep 10
+		    status=$(openstack server show -f value -c status "$server_id")
+		done
+		echo "$(date) Server "$server_id" is active"
+done
 
 echo "$(date) Running ansible playbook"
 ansible-playbook -i "$hostsfile" site.yaml
