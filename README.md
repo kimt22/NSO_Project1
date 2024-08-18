@@ -35,15 +35,15 @@ source <name of open-rc file>
 ```
 4. To run install script
 ```bash
-./install <name of open-rc file> <tag> <path to generated public key>
+./install <name of open-rc file> <tag> <generated key>
 ```
 5. To run operate script
 ```bash
-./operate <name of open-rc file> <tag> <path to generated public key>
+./operate <name of open-rc file> <tag> <generated key>
 ```
 6. To run cleanup script
 ```bash
-./cleanup <name of open-rc file> <tag> <path to generated public key>
+./cleanup <name of open-rc file> <tag> <generated key>
 ```
 Requirements 
 ```bash
