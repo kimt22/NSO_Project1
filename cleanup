@@ -1,176 +1,165 @@
 #!/bin/bash
 
-# Function to display the current date and time
-display_current_date_time() {
-    echo "$(date)"
-}
-
-# Variables
-openrcfile=$1
+openrc=$1
 tag=$2
-sshk=$3
-sshkey="${sshk}.pub"
-required_dev_servers=$(cat servers.conf)
+ssh_private=$3
+ssh_public="${ssh_private}.pub"
+node_count=3
 
-def_network="${tag}_network"
-def_subnet="${tag}_subnet"
-def_keypair="${tag}_key"
-def_router="${tag}_router"
-def_security_grp="${tag}_security_group"
-haproxyserv="${tag}_HAproxy"
-haproxyserv2="${tag}_HAproxy2"
-bastionserv="${tag}_bastion"
-devlop_serv="${tag}_dev"
-virtualip="${tag}_vip"
-sshconf_file="config"
-knownhosts="known_hosts"
-hostsfile="hosts"
-floating_ip2=$(cat floatipadd2)
+source "$openrc" || { printf "Failed to source openrc file\n" >&2; exit 1; }
+sudo chmod 600 "$ssh_private"
+sudo chmod 600 "$ssh_public" || { printf "Failed to set permissions for SSH public key\n" >&2; exit 1; }
 
-# Function to clean up servers
-clean_up_servers() {
-  devserv=($(openstack server list --name "$tag" -c ID -f value))
-  n=${#devserv[@]}
+echo "$(date) Initialising Cleanup"
 
-  if [[ $n -gt 0 ]]; then
-    echo "$(date) $n servers found. Deleting servers..."
+network="${tag}_network"
+subnet="${tag}_subnet"
+keypair="${tag}_keypair"
+router="${tag}_router"
+securitygroup="${tag}_securitygroup"
+proxy1="${tag}_HAproxy1"
+proxy2="${tag}_HAproxy2"
+bastion="${tag}_bastion"
+nodes="${tag}_dev"
+vip_port="${tag}_vip"
+sshconfig="${tag}_config"
+known_hosts="known_hosts"
+inventory_file="hosts"
 
-    for no_serv in "${devserv[@]}"; do
-      openstack server delete "$no_serv"
+# Function to delete servers
+delete_servers() {
+    nametag=$1
+    server_ids=$(openstack server list --name "$nametag" -c ID -f value)
+    a=$(echo "$server_ids" | wc -l)
+    if [[ -n "$server_ids" ]]; then
+        echo "$(date) There are $a servers in total"
+        echo "$(date) Deleting servers..."
+        for server_id in $server_ids; do
+            openstack server delete "$server_id" || printf "Failed to delete server %s\n" "$server_id" >&2
+        done
+        echo "$(date) Deleted $a servers successfully"
+    else
+        echo "$(date) No Servers are present to delete"
+    fi
+}
+
+# Function to delete floating IPs
+delete_floating_ips() {
+    floating_ips=$(openstack floating ip list -c ID -f value)
+    a=$(echo "$floating_ips" | wc -l)
+    if [[ -n "$floating_ips" ]]; then
+        for floating_ip in $floating_ips; do
+            echo "$(date) Deleting floating IP"
+            openstack floating ip delete "$floating_ip" || printf "Failed to delete floating IP %s\n" "$floating_ip" >&2
+        done
+        echo "$(date) Deleted $a floating IPs successfully"
+    else
+        echo "$(date) Floating IPs not present"
+    fi
+}
+
+# Function to disconnect router from subnet
+disconnect_router_from_subnet() {
+    router_name=$1
+    router_id=$(openstack router list | grep "${router_name}" | awk '{print $2}')
+    if [[ -n "${router_id}" ]]; then
+        echo "$(date) Router '${router_name}' found with ID: ${router_id}"
+        subnet_id=$(openstack router show "${router_id}" -f json | jq -r '.interfaces_info[].subnet_id')
+        openstack router remove subnet "${router_id}" "${subnet_id}" || printf "Failed to remove subnet %s from router %s\n" "$subnet_id" "$router_id" >&2
+        echo "$(date) Disconnected router from subnet"
+    else
+        echo "$(date) Router '${router_name}' is not present"
+    fi
+}
+
+# Function to delete router
+delete_router() {
+    router_name=$1
+    router_id=$(openstack router list | grep -w "${router_name}" | awk '{print $2}')
+    if [[ -n "${router_id}" ]]; then
+        echo "$(date) Deleting router"
+        openstack router delete "${router_id}" || printf "Failed to delete router %s\n" "$router_id" >&2
+        echo "$(date) Router '${router_name}' deleted successfully"
+    else
+        echo "$(date) Router '${router_name}' is not present"
+    fi
+}
+
+# Function to delete subnets
+delete_subnets() {
+    subnet_name=$1
+    subnet_id=$(openstack subnet list | grep -w "${subnet_name}" | awk '{print $2}')
+    if [[ -n "${subnet_id}" ]]; then
+        echo "$(date) Deleting subnet"
+        openstack subnet delete "${subnet_id}" || printf "Failed to delete subnet %s\n" "$subnet_id" >&2
+        echo "$(date) Subnet '${subnet_name}' deleted successfully"
+    else
+        echo "$(date) Subnet '${subnet_name}' is not present"
+    fi
+}
+
+# Function to delete virtual port
+delete_virtual_port() {
+    echo "$(date) Deleting virtual port"
+    openstack port delete "$vip_port" || printf "Failed to delete virtual port %s\n" "$vip_port" >&2
+    echo "$(date) Deleted virtual port"
+}
+
+# Function to delete networks
+delete_networks() {
+    nametag=$1
+    network_ids=$(openstack network list --tags "$nametag" -c ID -f value)
+    if [[ -n "$network_ids" ]]; then
+        for network_id in $network_ids; do
+            openstack network delete "$network_id" || printf "Failed to delete network %s\n" "$network_id" >&2
+        done
+        echo "$(date) Deleted network"
+    else
+        echo "$(date) Network is not present"
+    fi
+}
+
+# Function to delete security groups
+delete_security_groups() {
+    security_group_name=$1
+    openstack security group delete "$security_group_name" || printf "Failed to delete security group %s\n" "$security_group_name" >&2
+    echo "$(date) Security group deleted"
+}
+
+# Function to delete keypairs
+delete_keypairs() {
+    keypair_name=$1
+    if openstack keypair show "$keypair_name" > /dev/null 2>&1; then
+        echo "$(date) Keypair $keypair_name exists"
+        openstack keypair delete "$keypair_name" || printf "Failed to delete keypair %s\n" "$keypair_name" >&2
+        echo "$(date) Keypair $keypair_name deleted"
+    else
+        echo "$(date) Keypair $keypair_name does not exist"
+    fi
+}
+
+# Main function
+main() {
+    delete_servers "$tag"
+    delete_floating_ips
+    disconnect_router_from_subnet "$router"
+    delete_router "$router"
+    delete_virtual_port
+    delete_subnets "$subnet"
+    delete_networks "$tag"
+    delete_security_groups "$securitygroup"
+    delete_keypairs "$keypair"
+
+    echo "$(date) Removing unwanted files"
+    files=("$sshconfig" "$known_hosts" "$inventory_file" "floating1" "floating2" "vipaddr" "unused" "node_count.txt")
+
+    for file in "${files[@]}"; do
+        if [[ -f "$file" ]]; then
+            rm "$file" || printf "Failed to remove file %s\n" "$file" >&2
+        fi
     done
-
-    echo "$(date) Servers deleted."
-  else
-    echo "$(date) No servers found to delete."
-  fi
+    echo "$(date) Done"
+    echo "$(date) Cleanup completed successfully"
 }
 
-# Function to clean up keypairs
-clean_up_keypairs() {
-  key=($(openstack keypair list -f value -c Name | grep "$tag"))
-
-  if [[ ${#key[@]} -gt 0 ]]; then
-    for pair in "${key[@]}"; do
-      openstack keypair delete "$pair"
-    done
-
-    echo "$(date) Keypairs deleted."
-  else
-    echo "$(date) No keypairs found to delete."
-  fi
-}
-
-# Function to clean up floating IPs
-clean_up_floatips() {
-  floatadd=($(openstack floating ip list --status DOWN -f value -c "Floating IP Address"))
-
-  if [[ ${#floatadd[@]} -gt 0 ]]; then
-    for add_float in "${floatadd[@]}"; do
-      openstack floating ip delete "$add_float"
-    done
-
-    echo "$(date) Floating IPs deleted."
-  else
-    echo "$(date) No floating IPs found to delete."
-  fi
-}
-
-# Function to clean up virtual ports
-clean_up_viprt() {
-  openstack floating ip unset --port "$floating_ip2"
-  echo "$(date) Disconnected floating IP from virtual port."
-
-  vfip=$(openstack port show "$virtualip" -f value -c fixed_ips | grep -Po '\d+\.\d+\.\d+\.\d+')
-  echo "$vfip" >> vadd
-
-  floatips_notassign=($(openstack floating ip list --port "$virtualip" --status ACTIVE -f value -c "Floating IP Address"))
-
-  for ipadd in "${floatips_notassign[@]}"; do
-    openstack floating ip unset --port "$ipadd"
-    echo "$(date) Unset floating IP $ipadd from port."
-  done
-
-  openstack port delete "$virtualip"
-  echo "$(date) Virtual port deleted."
-}
-
-# Function to clean up subnets
-clean_up_subnets() {
-  snets=($(openstack subnet list --tag "$tag" -c ID -f value))
-
-  if [[ ${#snets[@]} -gt 0 ]]; then
-    for subnet in "${snets[@]}"; do
-      openstack router remove subnet "$def_router" "$subnet"
-      openstack subnet delete "$subnet"
-    done
-
-    echo "$(date) Subnets deleted."
-  else
-    echo "$(date) No subnets found to delete."
-  fi
-}
-
-# Function to clean up routers
-clean_up_routers() {
-  list_routers=($(openstack router list --tag "$tag" -f value -c Name))
-
-  if [[ ${#list_routers[@]} -gt 0 ]]; then
-    for router in "${list_routers[@]}"; do
-      openstack router delete "$router"
-    done
-
-    echo "$(date) Routers deleted."
-  else
-    echo "$(date) No routers found to delete."
-  fi
-}
-
-# Function to clean up networks
-clean_up_networks() {
-  list_network=($(openstack network list --tag "$tag" -f value -c Name))
-
-  if [[ ${#list_network[@]} -gt 0 ]]; then
-    for networks in "${list_network[@]}"; do
-      openstack network delete "$networks"
-    done
-
-    echo "$(date) Networks deleted."
-  else
-    echo "$(date) No networks found to delete."
-  fi
-}
-
-# Function to clean up security groups
-clean_up_securitygrps() {
-  list_sectygrp=($(openstack security group list --tag "$tag" -f value -c Name))
-
-  if [[ ${#list_sectygrp[@]} -gt 0 ]]; then
-    for security in "${list_sectygrp[@]}"; do
-      openstack security group delete "$security"
-    done
-
-    echo "$(date) Security groups deleted."
-  else
-    echo "$(date) No security groups found to delete."
-  fi
-}
-
-# Main script execution
-display_current_date_time
-echo "Starting cleaning of $tag using $openrcfile for credentials."
-source "$openrcfile"
-chmod 600 "$sshk"
-chmod 600 "$sshkey"
-
-# Call the cleanup functions
-clean_up_servers
-clean_up_keypairs
-clean_up_viprt
-clean_up_floatips
-clean_up_subnets
-clean_up_routers
-clean_up_networks
-clean_up_securitygrps
-
-# Remove unnecessary files
-rm -f "$sshconf_file" "$knownhosts" "floatipadd1" "floatipadd2" "$hostsfile" "addr_vip" "vadd"
+main "$@"

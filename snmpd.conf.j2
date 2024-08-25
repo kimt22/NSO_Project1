@@ -1,4 +1,3 @@
-###########################################################################
 #
 # snmpd.conf
 # An example configuration file for configuring the Net-SNMP agent ('snmpd')
@@ -33,10 +32,11 @@ sysServices    72
 # master: Should the agent operate as a master agent or not.
 #   Currently, the only supported master agent type for this token
 #   is "agentx".
-#   
+#
 #   arguments: (on|yes|agentx|all|off|no)
 
 master  agentx
+
 
 # agentaddress: The IP address and port number that the agent will listen on.
 #   By default the agent listens to any and all traffic from any
@@ -47,7 +47,7 @@ master  agentx
 #   arguments: [transport:]port[@interface/address],...
 
 agentaddress  0.0.0.0,[::1]
-
+#agentaddress udp:161
 
 
 ###########################################################################
@@ -56,7 +56,7 @@ agentaddress  0.0.0.0,[::1]
 #   This section defines who is allowed to talk to your running
 #   snmp agent.
 
-# Views 
+# Views
 #   arguments viewname included [oid]
 
 #  system + hrSystem groups only
@@ -77,10 +77,11 @@ rocommunity6 public default -V systemonly
 #
 # createUser username (MD5|SHA|SHA-512|SHA-384|SHA-256|SHA-224) authpassphrase [DES|AES] [privpassphrase]
 # e.g.
+
+
 # createuser authPrivUser SHA-512 myauthphrase AES myprivphrase
 #
-# This should be put into /var/lib/snmp/snmpd.conf 
+# This should be put into /var/lib/snmp/snmpd.conf
 #
-# rouser: a SNMPv3 read-only access username
 #    arguments: username [noauth|auth|priv [OID | -V VIEW [CONTEXT]]]
 rouser authPrivUser authpriv -V systemonly
